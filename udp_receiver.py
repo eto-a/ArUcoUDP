@@ -4,10 +4,10 @@ def main():
     UDP_IP = "127.0.0.1"
     UDP_PORT = 5005
 
-    # Создаем UDP сокет
+    # Create UDP socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     
-    # Привязываем сокет к IP и порту
+    # Bind socket to IP and port
     try:
         sock.bind((UDP_IP, UDP_PORT))
     except Exception as e:
@@ -19,11 +19,11 @@ def main():
 
     try:
         while True:
-            # Получаем данные (буфер 1024 байта)
+            # Receive data (1024 bytes buffer)
             data, addr = sock.recvfrom(1024)
             message = data.decode()
             
-            # Выводим полученное сообщение
+            # Output received message
             print(f"Received from {addr}: {message}")
             
     except KeyboardInterrupt:
