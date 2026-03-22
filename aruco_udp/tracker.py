@@ -2,6 +2,7 @@ import cv2
 import cv2.aruco as aruco
 import socket
 import math
+import time
 from .logger import village_logger as logger
 from . import config
 
@@ -32,7 +33,7 @@ class ArUcoTracker:
         angle = int(math.degrees(math.atan2(dy, dx)))
         return angle + 360 if angle < 0 else angle
 
-    def run(self, on_frame_callback=None, on_stop_callback=None):
+    def run(self, on_frame_callback=None, on_stop_callback=None, on_stats_callback=None):
         """Main detection loop."""
         self.cap = cv2.VideoCapture(self.camera_idx, cv2.CAP_DSHOW)
         if not self.cap.isOpened():
@@ -49,6 +50,10 @@ class ArUcoTracker:
         actual_w = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         actual_h = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         logger.info(f"Tracking started: Cam {self.camera_idx}, Res {actual_w}x{actual_h}, UDP {self.udp_port}")
+
+        packet_count = 0
+        frame_count = 0
+        last_stats_time = time.time()
 
         while not self.stop_event.is_set():
             ret, frame = self.cap.read()
@@ -79,11 +84,22 @@ class ArUcoTracker:
 
                     try:
                         self.sock.sendto(msg.encode(), (self.udp_ip, self.udp_port))
+                        packet_count += 1
                     except Exception as e:
                         logger.debug(f"UDP send error: {e}")
                     
                     cv2.putText(frame, f"ID:{int(marker_id[0])} ang:{angle}", (cx + 10, cy), 
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+            # Pass frame's metadata/stats periodically
+            frame_count += 1
+            curr_time = time.time()
+            if curr_time - last_stats_time >= 0.5:
+                fps = frame_count / (curr_time - last_stats_time)
+                if on_stats_callback:
+                    on_stats_callback({"fps": round(fps, 1), "packets": packet_count})
+                frame_count = 0
+                last_stats_time = curr_time
 
             # Pass frame to callback if it exists
             if on_frame_callback:

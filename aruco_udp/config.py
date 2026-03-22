@@ -17,6 +17,7 @@ MODE_CORNERS = "All Corners"
 WINDOW_TITLE = "ArUco UDP Tracker"
 WINDOW_SIZE = "480x320"
 THEME = "dark"
+AUTHOR_INFO = "by Artem Piskov | art.piskov@gmail.com"
 
 # Detection Settings
 PREVIEW_MAX_SIZE = 640
