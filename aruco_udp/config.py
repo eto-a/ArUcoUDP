@@ -15,7 +15,7 @@ MODE_CORNERS = "All Corners"
 
 # UI Settings
 WINDOW_TITLE = "ArUco UDP Tracker"
-WINDOW_SIZE = "480x320"
+WINDOW_SIZE = "500x450"
 THEME = "dark"
 AUTHOR_INFO = "by Artem Piskov | art.piskov@gmail.com"
 

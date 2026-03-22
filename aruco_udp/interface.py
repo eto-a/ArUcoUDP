@@ -1,8 +1,9 @@
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import messagebox, ttk, scrolledtext
 import threading
 import cv2
 import sv_ttk
+import logging
 from comtypes import CoInitialize, CoUninitialize
 from pygrabber.dshow_graph import FilterGraph
 
@@ -10,16 +11,32 @@ from .tracker import ArUcoTracker
 from .logger import village_logger as logger
 from . import config
 
+class LogHandler(logging.Handler):
+    """Custom logging handler to redirect logs to a Tkinter Text widget."""
+    def __init__(self, text_widget):
+        super().__init__()
+        self.text_widget = text_widget
+        self.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', '%H:%M:%S'))
+
+    def emit(self, record):
+        msg = self.format(record)
+        def append():
+            self.text_widget.configure(state='normal')
+            self.text_widget.insert(tk.END, msg + '\n')
+            self.text_widget.configure(state='disabled')
+            self.text_widget.see(tk.END)
+        self.text_widget.after(0, append)
+
 class ArucoConfigApp:
-    """Modern GUI settings application for ArUco Tracking."""
+    """Modern GUI settings application with Tabbed interface and Live Logs."""
     
     def __init__(self, root):
         self.root = root
         self.root.title(config.WINDOW_TITLE)
-        self.root.geometry("500x380") # Slightly larger for modern spacing
+        self.root.geometry(config.WINDOW_SIZE)
         self.root.resizable(False, False)
         
-        # Apply Sun Valley modern theme
+        # High-DPI Fix (already in main.py, but good to ensure spacing)
         sv_ttk.set_theme(config.THEME)
         
         self.tracker_thread = None
@@ -37,29 +54,34 @@ class ArucoConfigApp:
             return {"0: Default": 0}
 
     def _setup_ui(self):
-        """Creates a modern card-based user interface."""
-        # Main container with consistent padding
-        main_frame = ttk.Frame(self.root, padding="20")
-        main_frame.pack(fill="both", expand=True)
+        """Creates a modern tabbed interface with cards and live logs."""
+        main_container = ttk.Frame(self.root, padding="15")
+        main_container.pack(fill="both", expand=True)
 
-        # --- HEADER ---
-        header = ttk.Frame(main_frame)
-        header.pack(fill="x", pady=(0, 15))
+        # --- PERSISTENT HEADER ---
+        header = ttk.Frame(main_container)
+        header.pack(fill="x", pady=(0, 10))
         
-        # Title and Pulse in one row
         title_row = ttk.Frame(header)
         title_row.pack(fill="x")
         ttk.Label(title_row, text="ArUco Tracker", font=("Segoe UI Variable Display", 18, "bold")).pack(side="left")
         self.pulse_label = ttk.Label(title_row, text=" ●", font=("Segoe UI", 14), foreground="#666666")
         self.pulse_label.pack(side="left", padx=5)
 
-        # Author sub-header for better visibility
-        author_label = ttk.Label(header, text=config.AUTHOR_INFO, font=("Segoe UI Variable Small", 9), foreground="#bbbbbb")
-        author_label.pack(side="top", anchor="w", padx=(2, 0))
+        ttk.Label(header, text=config.AUTHOR_INFO, font=("Segoe UI Variable Small", 9), foreground="#bbbbbb").pack(side="top", anchor="w", padx=(2, 0))
 
-        # --- CAMERA CARD ---
-        cam_card = ttk.LabelFrame(main_frame, text=" 📷 Camera & Lens ", padding="12")
-        cam_card.pack(fill="x", pady=(0, 12))
+        # --- TABBED INTERFACE ---
+        self.notebook = ttk.Notebook(main_container)
+        self.notebook.pack(fill="both", expand=True, pady=10)
+
+        # TAB 1: SETTINGS
+        self.tab_settings = ttk.Frame(self.notebook, padding="10")
+        self.notebook.add(self.tab_settings, text=" ⚙ Settings ")
+
+        # --- SETTINGS CARDS (inside tab_settings) ---
+        # Camera Card
+        cam_card = ttk.LabelFrame(self.tab_settings, text=" 📷 Camera & Lens ", padding="10")
+        cam_card.pack(fill="x", pady=(0, 10))
 
         self.cameras_dict = self._get_cameras()
         camera_list = list(self.cameras_dict.keys())
@@ -67,7 +89,6 @@ class ArucoConfigApp:
         
         row1 = ttk.Frame(cam_card)
         row1.pack(fill="x")
-        
         self.camera_menu = ttk.Combobox(row1, textvariable=self.camera_var, values=camera_list, state="readonly")
         self.camera_menu.pack(side="left", fill="x", expand=True, padx=(0, 10))
         self.camera_var.trace_add("write", self._update_resolutions)
@@ -76,15 +97,13 @@ class ArucoConfigApp:
         self.res_menu = ttk.Combobox(row1, textvariable=self.res_var, state="readonly", width=12)
         self.res_menu.pack(side="right")
 
-        # --- STREAM & NETWORK CARD ---
-        net_card = ttk.LabelFrame(main_frame, text=" 🌐 Stream & Network ", padding="12")
-        net_card.pack(fill="x", pady=(0, 20))
+        # Network Card
+        net_card = ttk.LabelFrame(self.tab_settings, text=" 🌐 Stream & Network ", padding="10")
+        net_card.pack(fill="x", pady=(0, 5))
 
         row2 = ttk.Frame(net_card)
-        row2.pack(fill="x", pady=(0, 10))
-        
-        # Mode selector on its own row or better integrated
-        ttk.Label(row2, text="Mode:").pack(side="left", padx=(0, 8))
+        row2.pack(fill="x", pady=(0, 8))
+        ttk.Label(row2, text="Mode:").pack(side="left", padx=(0, 5))
         self.mode_var = tk.StringVar(value=config.MODE_CENTER)
         self.mode_menu = ttk.Combobox(row2, textvariable=self.mode_var, 
                                          values=[config.MODE_CENTER, config.MODE_CORNERS], state="readonly", width=20)
@@ -92,22 +111,32 @@ class ArucoConfigApp:
 
         row3 = ttk.Frame(net_card)
         row3.pack(fill="x")
-        
-        ttk.Label(row3, text="IP:").pack(side="left", padx=(0, 8))
+        ttk.Label(row3, text="IP:").pack(side="left", padx=(0, 5))
         self.ip_entry = ttk.Entry(row3, width=15)
         self.ip_entry.insert(0, config.DEFAULT_IP)
-        self.ip_entry.pack(side="left", fill="x", expand=True, padx=(0, 15))
+        self.ip_entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
 
         ttk.Label(row3, text="Port:").pack(side="left", padx=(0, 5))
         self.port_entry = ttk.Entry(row3, width=8)
         self.port_entry.insert(0, str(config.DEFAULT_PORT))
         self.port_entry.pack(side="left")
 
-        # --- TELEMETRY & CONTROLS ---
-        footer = ttk.Frame(main_frame)
+        # TAB 2: LOGS
+        self.tab_logs = ttk.Frame(self.notebook, padding="10")
+        self.notebook.add(self.tab_logs, text=" 📝 Logs ")
+
+        self.log_text = scrolledtext.ScrolledText(self.tab_logs, height=10, state='disabled', font=("Consolas", 9), 
+                                                   background="#1e1e1e", foreground="#d4d4d4", borderwidth=0)
+        self.log_text.pack(fill="both", expand=True)
+
+        # Setup Logging Handler
+        self.log_handler = LogHandler(self.log_text)
+        logger.addHandler(self.log_handler)
+
+        # --- PERSISTENT FOOTER ---
+        footer = ttk.Frame(main_container)
         footer.pack(fill="x", side="bottom")
 
-        # Telemetry Display
         self.stats_label = ttk.Label(footer, text="FPS: -- | Packets: 0", font=("Segoe UI Variable Small", 9), foreground="#888888")
         self.stats_label.pack(side="left", pady=5)
 
@@ -143,9 +172,10 @@ class ArucoConfigApp:
             )
             self.tracker_thread.start()
             
-            self.pulse_label.config(foreground="#1DB954") # Success Green
+            self.pulse_label.config(foreground="#1DB954")
             self.btn_start.config(state="disabled")
             self.btn_stop.config(state="normal")
+            logger.info("Tracking session initiated.")
         except ValueError:
             messagebox.showwarning("Input Error", "Invalid port number.")
 
@@ -154,15 +184,14 @@ class ArucoConfigApp:
             self.stop_event.set()
             self.pulse_label.config(foreground="#999999")
             self.stats_label.config(text="FPS: -- | Packets: 0")
+            logger.info("Stopping tracker...")
 
     def _on_tracker_stats(self, stats):
-        """Update live telemetry from tracker thread."""
         fps = stats.get("fps", 0)
         packets = stats.get("packets", 0)
         self.root.after(0, lambda: self.stats_label.config(text=f"FPS: {fps} | Packets: {packets}"))
 
     def _on_tracker_frame(self, frame):
-        """Draw frame in OpenCV window."""
         h, w = frame.shape[:2]
         if max(h, w) > config.PREVIEW_MAX_SIZE:
             scale = config.PREVIEW_MAX_SIZE / max(h, w)
@@ -175,10 +204,10 @@ class ArucoConfigApp:
             self.root.after(0, self.stop)
 
     def _on_tracker_stop(self):
-        """Called when tracking thread stops."""
         self.is_running = False
         cv2.destroyAllWindows()
         self.root.after(0, self._update_ui_to_idle)
+        logger.info("Tracking stopped.")
 
     def _update_ui_to_idle(self):
         self.pulse_label.config(foreground="#999999")
@@ -188,7 +217,6 @@ class ArucoConfigApp:
     def _update_resolutions(self, *args):
         cam_idx = self.cameras_dict.get(self.camera_var.get(), 0)
         self.res_menu.config(state="disabled")
-        
         thread = threading.Thread(target=self._probe_resolutions, args=(cam_idx,))
         thread.start()
 
@@ -200,11 +228,9 @@ class ArucoConfigApp:
             graph.add_video_input_device(cam_idx)
             device = graph.get_input_device()
             formats = device.get_formats()
-            
             unique_res = set()
             for f in formats:
                 unique_res.add((f['width'], f['height']))
-            
             sorted_res = sorted(list(unique_res), key=lambda x: x[0]*x[1], reverse=True)
             supported = [f"{w}x{h}" for w, h in sorted_res]
         except Exception as e:
@@ -212,7 +238,6 @@ class ArucoConfigApp:
             supported = ["640x480", "1280x720"]
         finally:
             CoUninitialize()
-        
         self.root.after(0, lambda: self._finalize_resolutions(supported))
 
     def _finalize_resolutions(self, resolutions):
