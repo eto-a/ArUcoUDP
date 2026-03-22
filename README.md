@@ -23,7 +23,14 @@ pyinstaller --onefile --noconsole main.py
 - **x, y**: Центр в пикселях
 - **angle**: Угол 0-360°
 
+## Проверка (UDP)
+Для просмотра входящих данных:
+```bash
+python udp_receiver.py
+```
+
 ## Структура
 - `tracker.py`: Логика детекции и UDP.
 - `interface.py`: GUI и потоки.
 - `main.py`: Точка входа.
+- `udp_receiver.py`: Утилита для теста приема данных.
