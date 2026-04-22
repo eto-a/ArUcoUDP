@@ -188,20 +188,24 @@ class ArucoConfigApp:
 
     def _on_tracker_stats(self, stats):
         fps = stats.get("fps", 0)
+        fps_cam = stats.get("fps_cam", 0)
         packets = stats.get("packets", 0)
-        self.root.after(0, lambda: self.stats_label.config(text=f"FPS: {fps} | Packets: {packets}"))
+        self.root.after(0, lambda: self.stats_label.config(
+            text=f"Logic: {fps} FPS | Cam: {fps_cam} FPS | Pkts: {packets}"
+        ))
 
     def _on_tracker_frame(self, frame):
+        # Only show preview if window is actually visible to save CPU
+        # But cv2.imshow usually creates its own window.
+        
+        # Optimization: Resize is expensive for 4K. 
+        # We could skip frames for preview if detection is more important.
         h, w = frame.shape[:2]
-        if max(h, w) > config.PREVIEW_MAX_SIZE:
-            scale = config.PREVIEW_MAX_SIZE / max(h, w)
-            display_frame = cv2.resize(frame, (0, 0), fx=scale, fy=scale)
-        else:
-            display_frame = frame
+        scale = config.PREVIEW_MAX_SIZE / max(h, w)
+        display_frame = cv2.resize(frame, (0, 0), fx=scale, fy=scale)
 
         cv2.imshow(config.WINDOW_TITLE, display_frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            self.root.after(0, self.stop)
+        cv2.waitKey(1)
 
     def _on_tracker_stop(self):
         self.is_running = False

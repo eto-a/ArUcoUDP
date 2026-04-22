@@ -21,3 +21,6 @@ AUTHOR_INFO = "by Artem Piskov | art.piskov@gmail.com"
 
 # Detection Settings
 PREVIEW_MAX_SIZE = 640
+ROI_PADDING = 200
+ROI_LOST_FRAMES = 5
+DETECTION_ADAPTIVE_STEP = 10
